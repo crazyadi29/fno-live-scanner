@@ -40,8 +40,8 @@ adapters = {
 }
 
 stored_broker_credentials = {
-    "fyers": {"app_id": "", "app_secret": "", "access_token": ""},
-    "kite": {"api_key": "", "api_secret": "", "access_token": ""}
+    "fyers": {"app_id": "", "app_secret": "", "access_token": "", "redirect_uri": ""},
+    "kite": {"api_key": "", "api_secret": "", "access_token": "", "redirect_uri": ""}
 }
 
 scanner = BreakoutScanner(
@@ -137,7 +137,6 @@ async def shutdown_event():
     for adp in adapters.values():
         await adp.stop()
 
-# Health check for cloud platforms
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "FnO Pulse Live Scanner"}
@@ -163,34 +162,88 @@ async def websocket_endpoint(websocket: WebSocket):
 # ----------------- 1-CLICK AUTO TOKEN OAUTH FLOWS -----------------
 
 @app.get("/api/auth/fyers/login-url")
-async def get_fyers_login_url(request: Request, app_id: str, app_secret: str):
-    stored_broker_credentials["fyers"]["app_id"] = app_id.strip()
+async def get_fyers_login_url(request: Request, app_id: str, app_secret: str, redirect_uri: Optional[str] = None):
+    app_id = app_id.strip()
+    if not app_id.endswith("-100") and "-" not in app_id and len(app_id) > 2:
+        app_id = f"{app_id}-100"
+
+    stored_broker_credentials["fyers"]["app_id"] = app_id
     stored_broker_credentials["fyers"]["app_secret"] = app_secret.strip()
     
-    base_url = str(request.base_url).rstrip("/")
-    forwarded_proto = request.headers.get("x-forwarded-proto", "")
-    if forwarded_proto == "https" and base_url.startswith("http://"):
-        base_url = "https://" + base_url[7:]
+    if not redirect_uri:
+        forwarded_host = request.headers.get("x-forwarded-host", "")
+        forwarded_proto = request.headers.get("x-forwarded-proto", "https")
+        if forwarded_host:
+            base_url = f"{forwarded_proto}://{forwarded_host}"
+        else:
+            base_url = str(request.base_url).rstrip("/")
+            if forwarded_proto == "https" and base_url.startswith("http://"):
+                base_url = "https://" + base_url[7:]
+        redirect_uri = f"{base_url}/api/auth/fyers/callback"
 
-    redirect_uri = f"{base_url}/api/auth/fyers/callback"
+    stored_broker_credentials["fyers"]["redirect_uri"] = redirect_uri
     auth_url = f"https://api-t1.fyers.in/api/v3/generate-authcode?client_id={app_id}&redirect_uri={redirect_uri}&response_type=code&state=fno_pulse"
-    return {"auth_url": auth_url, "redirect_uri": redirect_uri}
+    return {"auth_url": auth_url, "redirect_uri": redirect_uri, "app_id": app_id}
+
+@app.post("/api/auth/fyers/exchange-token")
+async def manual_fyers_token_exchange(payload: Dict[str, str]):
+    """Exchange auth_code or full redirected URL for access token manually if redirect was to external page"""
+    global active_adapter_name
+    app_id = payload.get("app_id", stored_broker_credentials["fyers"]["app_id"]).strip()
+    app_secret = payload.get("app_secret", stored_broker_credentials["fyers"]["app_secret"]).strip()
+    auth_code_input = payload.get("auth_code", "").strip()
+
+    if not app_id.endswith("-100") and "-" not in app_id and len(app_id) > 2:
+        app_id = f"{app_id}-100"
+
+    # Extract auth_code if full URL was pasted
+    if "auth_code=" in auth_code_input:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(auth_code_input)
+        auth_code = urllib.parse.parse_qs(parsed.query).get("auth_code", [""])[0]
+    else:
+        auth_code = auth_code_input
+
+    if not auth_code:
+        raise HTTPException(status_code=400, detail="Missing auth code")
+
+    app_id_hash = hashlib.sha256(f"{app_id}:{app_secret}".encode('utf-8')).hexdigest()
+    token_url = "https://api-t1.fyers.in/api/v3/validate-authcode"
+    body = {
+        "grant_type": "authorization_code",
+        "appIdHash": app_id_hash,
+        "code": auth_code
+    }
+
+    try:
+        resp = requests.post(token_url, json=body, timeout=10)
+        data = resp.json()
+        access_token = data.get("access_token")
+        if access_token:
+            stored_broker_credentials["fyers"]["access_token"] = access_token
+            adapters["fyers"].update_credentials({"app_id": app_id, "access_token": access_token})
+            await adapters["fyers"].start()
+            active_adapter_name = "fyers"
+            return {"status": "success", "access_token": access_token, "message": "Fyers connected successfully!"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Fyers Token Error: {resp.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/auth/fyers/callback")
 async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None, code: Optional[str] = None):
     global active_adapter_name
     received_code = auth_code or code or request.query_params.get("auth_code") or request.query_params.get("code")
     if not received_code:
-        return HTMLResponse("<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ Error: No auth code received from Fyers.</h2>")
+        return HTMLResponse("<h2 style='color:#FF1744;font-family:system-ui;text-align:center;padding:50px;'>❌ Error: No auth code received from Fyers.</h2>")
     
     app_id = stored_broker_credentials["fyers"]["app_id"]
     app_secret = stored_broker_credentials["fyers"]["app_secret"]
     
     if not app_id or not app_secret:
-        return HTMLResponse("<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ App ID or Secret missing. Please start from Settings again.</h2>")
+        return HTMLResponse("<h2 style='color:#FF1744;font-family:system-ui;text-align:center;padding:50px;'>❌ App ID or Secret missing. Please initiate login from the scanner settings.</h2>")
     
     app_id_hash = hashlib.sha256(f"{app_id}:{app_secret}".encode('utf-8')).hexdigest()
-    
     token_url = "https://api-t1.fyers.in/api/v3/validate-authcode"
     payload = {
         "grant_type": "authorization_code",
@@ -212,8 +265,8 @@ async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None
             return HTMLResponse("""
             <html>
               <body style='background:#0B0E14;color:#00E676;font-family:system-ui;text-align:center;padding:60px;'>
-                <h1 style='font-size:28px;'>⚡ FYERS 1-CLICK AUTHENTICATION SUCCESSFUL!</h1>
-                <p style='color:#94A3B8;font-size:16px;'>Daily access token generated and connected to FnO Scanner automatically.</p>
+                <h1 style='font-size:26px;'>⚡ FYERS 1-CLICK AUTHENTICATION SUCCESSFUL!</h1>
+                <p style='color:#94A3B8;font-size:15px;'>Daily access token generated and connected to FnO Scanner automatically.</p>
                 <div style='background:#121824;border:1px solid #1E293B;padding:15px;border-radius:10px;margin:20px auto;max-width:500px;color:#F1F5F9;word-break:break-all;font-family:monospace;font-size:12px;'>
                   """ + access_token[:35] + """... [Token Active]
                 </div>
@@ -222,38 +275,77 @@ async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None
                   if (window.opener) {
                     window.opener.postMessage({ type: 'BROKER_CONNECTED', broker: 'fyers', token: '""" + access_token + """' }, '*');
                   }
-                  setTimeout(() => window.close(), 1800);
+                  setTimeout(() => window.close(), 1600);
                 </script>
               </body>
             </html>
             """)
         else:
-            return HTMLResponse(f"<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ Token Exchange Failed: {resp.text}</h2>")
+            return HTMLResponse(f"<div style='background:#0B0E14;color:#FF1744;font-family:system-ui;padding:40px;text-align:center;'><h2>❌ Token Exchange Failed</h2><p style='color:#94A3B8;font-family:monospace;'>{resp.text}</p></div>")
     except Exception as e:
-        return HTMLResponse(f"<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ Error: {str(e)}</h2>")
+        return HTMLResponse(f"<div style='background:#0B0E14;color:#FF1744;font-family:system-ui;padding:40px;text-align:center;'><h2>❌ Error</h2><p>{str(e)}</p></div>")
 
 @app.get("/api/auth/kite/login-url")
-async def get_kite_login_url(request: Request, api_key: str, api_secret: str):
+async def get_kite_login_url(request: Request, api_key: str, api_secret: str, redirect_uri: Optional[str] = None):
     stored_broker_credentials["kite"]["api_key"] = api_key.strip()
     stored_broker_credentials["kite"]["api_secret"] = api_secret.strip()
     auth_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={api_key}"
     return {"auth_url": auth_url}
+
+@app.post("/api/auth/kite/exchange-token")
+async def manual_kite_token_exchange(payload: Dict[str, str]):
+    global active_adapter_name
+    api_key = payload.get("api_key", stored_broker_credentials["kite"]["api_key"]).strip()
+    api_secret = payload.get("api_secret", stored_broker_credentials["kite"]["api_secret"]).strip()
+    req_token_input = payload.get("request_token", "").strip()
+
+    if "request_token=" in req_token_input:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(req_token_input)
+        req_token = urllib.parse.parse_qs(parsed.query).get("request_token", [""])[0]
+    else:
+        req_token = req_token_input
+
+    if not req_token:
+        raise HTTPException(status_code=400, detail="Missing request_token")
+
+    checksum = hashlib.sha256(f"{api_key}{req_token}{api_secret}".encode('utf-8')).hexdigest()
+    token_url = "https://api.kite.trade/session/token"
+    body = {
+        "api_key": api_key,
+        "request_token": req_token,
+        "checksum": checksum
+    }
+
+    try:
+        resp = requests.post(token_url, data=body, timeout=10)
+        data = resp.json()
+        access_token = data.get("data", {}).get("access_token")
+        if access_token:
+            stored_broker_credentials["kite"]["access_token"] = access_token
+            adapters["kite"].update_credentials({"api_key": api_key, "access_token": access_token})
+            await adapters["kite"].start()
+            active_adapter_name = "kite"
+            return {"status": "success", "access_token": access_token, "message": "Zerodha Kite connected successfully!"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Kite Token Error: {resp.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/auth/kite/callback")
 async def kite_oauth_callback(request: Request, request_token: Optional[str] = None, status: Optional[str] = None):
     global active_adapter_name
     req_token = request_token or request.query_params.get("request_token")
     if not req_token:
-        return HTMLResponse("<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ Error: No request_token received from Zerodha Kite.</h2>")
+        return HTMLResponse("<h2 style='color:#FF1744;font-family:system-ui;text-align:center;padding:50px;'>❌ Error: No request_token received from Zerodha Kite.</h2>")
     
     api_key = stored_broker_credentials["kite"]["api_key"]
     api_secret = stored_broker_credentials["kite"]["api_secret"]
     
     if not api_key or not api_secret:
-        return HTMLResponse("<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ API Key or Secret missing. Please start from Settings again.</h2>")
+        return HTMLResponse("<h2 style='color:#FF1744;font-family:system-ui;text-align:center;padding:50px;'>❌ API Key or Secret missing. Please start from Settings again.</h2>")
     
     checksum = hashlib.sha256(f"{api_key}{req_token}{api_secret}".encode('utf-8')).hexdigest()
-    
     token_url = "https://api.kite.trade/session/token"
     payload = {
         "api_key": api_key,
@@ -275,8 +367,8 @@ async def kite_oauth_callback(request: Request, request_token: Optional[str] = N
             return HTMLResponse("""
             <html>
               <body style='background:#0B0E14;color:#00E676;font-family:system-ui;text-align:center;padding:60px;'>
-                <h1 style='font-size:28px;'>⚡ ZERODHA KITE 1-CLICK AUTHENTICATION SUCCESSFUL!</h1>
-                <p style='color:#94A3B8;font-size:16px;'>Daily access token generated and connected to FnO Scanner automatically.</p>
+                <h1 style='font-size:26px;'>⚡ ZERODHA KITE 1-CLICK AUTHENTICATION SUCCESSFUL!</h1>
+                <p style='color:#94A3B8;font-size:15px;'>Daily access token generated and connected to FnO Scanner automatically.</p>
                 <div style='background:#121824;border:1px solid #1E293B;padding:15px;border-radius:10px;margin:20px auto;max-width:500px;color:#F1F5F9;word-break:break-all;font-family:monospace;font-size:12px;'>
                   """ + access_token[:35] + """... [Token Active]
                 </div>
@@ -285,15 +377,15 @@ async def kite_oauth_callback(request: Request, request_token: Optional[str] = N
                   if (window.opener) {
                     window.opener.postMessage({ type: 'BROKER_CONNECTED', broker: 'kite', token: '""" + access_token + """' }, '*');
                   }
-                  setTimeout(() => window.close(), 1800);
+                  setTimeout(() => window.close(), 1600);
                 </script>
               </body>
             </html>
             """)
         else:
-            return HTMLResponse(f"<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ Token Exchange Failed: {resp.text}</h2>")
+            return HTMLResponse(f"<div style='background:#0B0E14;color:#FF1744;font-family:system-ui;padding:40px;text-align:center;'><h2>❌ Token Exchange Failed</h2><p style='color:#94A3B8;font-family:monospace;'>{resp.text}</p></div>")
     except Exception as e:
-        return HTMLResponse(f"<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ Error: {str(e)}</h2>")
+        return HTMLResponse(f"<div style='background:#0B0E14;color:#FF1744;font-family:system-ui;padding:40px;text-align:center;'><h2>❌ Error</h2><p>{str(e)}</p></div>")
 
 # ----------------- REST & FILE DOWNLOAD ENDPOINTS -----------------
 

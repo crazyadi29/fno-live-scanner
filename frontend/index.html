@@ -194,7 +194,7 @@
       <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
         <div class="flex items-center space-x-2">
           <span class="text-xl">⚡</span>
-          <h3 class="text-lg font-black text-white">Broker Connection & 1-Click Auto-Login</h3>
+          <h3 class="text-lg font-black text-white">Broker Connection & 1-Click Login</h3>
         </div>
         <button id="close-settings-btn" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
       </div>
@@ -206,15 +206,19 @@
         <div class="p-4 rounded-xl bg-slate-900/90 border border-cyan-500/30 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center space-x-2">
-              <span class="text-base font-bold text-cyan-400">🟢 Fyers API (v3) — 1-Click Auto Login</span>
+              <span class="text-base font-bold text-cyan-400">🟢 Fyers API (v3) Login</span>
             </div>
             <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-bold border border-cyan-800">RECOMMENDED</span>
           </div>
-          <p class="text-slate-400 text-[11px]">Enter your App ID and Secret once. Each morning, just click the button below to authenticate with PIN/OTP — the daily token is generated and connected automatically!</p>
+
+          <div class="p-2.5 rounded bg-slate-950/80 border border-slate-800 font-mono text-[11px] text-slate-300">
+            <span class="text-slate-500 block mb-0.5">ℹ️ Required Redirect URI in Fyers Portal:</span>
+            <span id="fyers-redirect-uri-display" class="text-cyan-400 font-bold select-all break-all"></span>
+          </div>
           
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block text-slate-400 mb-1">Fyers App ID (e.g. XC12345-100)</label>
+              <label class="block text-slate-400 mb-1">Fyers App ID (e.g. XC12345 or XC12345-100)</label>
               <input id="fyers-app-id" type="text" placeholder="XC12345-100" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
             </div>
             <div>
@@ -224,16 +228,31 @@
           </div>
 
           <button id="btn-fyers-1click" type="button" class="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-black text-sm rounded-lg shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2">
-            <span>⚡ 1-Click Fyers Login & Auto-Generate Token</span>
+            <span>⚡ 1-Click Fyers Login Popup</span>
           </button>
+
+          <!-- Fallback Quick Paste -->
+          <div class="pt-2 border-t border-slate-800/80">
+            <label class="block text-slate-400 mb-1">If Fyers redirected to another URL, paste it here & click Exchange:</label>
+            <div class="flex space-x-2">
+              <input id="fyers-manual-code" type="text" placeholder="Paste redirected URL or auth_code..." class="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono text-xs">
+              <button id="btn-fyers-manual-exchange" type="button" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 font-bold rounded">
+                Exchange
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- 2. Zerodha Kite 1-Click Auto Token -->
         <div class="p-4 rounded-xl bg-slate-900/90 border border-orange-500/30 space-y-3">
           <div class="flex items-center justify-between">
-            <span class="text-base font-bold text-orange-400">🟠 Zerodha Kite Connect — 1-Click Auto Login</span>
+            <span class="text-base font-bold text-orange-400">🟠 Zerodha Kite Connect Login</span>
           </div>
-          <p class="text-slate-400 text-[11px]">Enter your Kite API Key and Secret. Click the button to log in with Zerodha 2FA — your daily access token will be exchanged and connected automatically!</p>
+
+          <div class="p-2.5 rounded bg-slate-950/80 border border-slate-800 font-mono text-[11px] text-slate-300">
+            <span class="text-slate-500 block mb-0.5">ℹ️ Required Redirect URI in Kite.trade:</span>
+            <span id="kite-redirect-uri-display" class="text-orange-400 font-bold select-all break-all"></span>
+          </div>
           
           <div class="grid grid-cols-2 gap-2">
             <div>
@@ -247,8 +266,19 @@
           </div>
 
           <button id="btn-kite-1click" type="button" class="w-full py-2.5 bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300 text-black font-black text-sm rounded-lg shadow-lg shadow-orange-500/20 transition flex items-center justify-center space-x-2">
-            <span>⚡ 1-Click Kite Login & Auto-Generate Token</span>
+            <span>⚡ 1-Click Kite Login Popup</span>
           </button>
+
+          <!-- Fallback Quick Paste -->
+          <div class="pt-2 border-t border-slate-800/80">
+            <label class="block text-slate-400 mb-1">If Kite redirected to another URL, paste it here & click Exchange:</label>
+            <div class="flex space-x-2">
+              <input id="kite-manual-code" type="text" placeholder="Paste redirected URL or request_token..." class="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono text-xs">
+              <button id="btn-kite-manual-exchange" type="button" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-orange-400 border border-slate-700 font-bold rounded">
+                Exchange
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- 3. Offline / Weekend Simulator Mode -->

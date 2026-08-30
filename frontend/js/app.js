@@ -143,9 +143,19 @@ document.addEventListener('DOMContentLoaded', () => {
     btnFyers1Click.addEventListener('click', () => settingsModal.launchFyersOneClickLogin());
   }
 
+  const btnFyersManual = document.getElementById('btn-fyers-manual-exchange');
+  if (btnFyersManual) {
+    btnFyersManual.addEventListener('click', () => settingsModal.manualExchangeFyers());
+  }
+
   const btnKite1Click = document.getElementById('btn-kite-1click');
   if (btnKite1Click) {
     btnKite1Click.addEventListener('click', () => settingsModal.launchKiteOneClickLogin());
+  }
+
+  const btnKiteManual = document.getElementById('btn-kite-manual-exchange');
+  if (btnKiteManual) {
+    btnKiteManual.addEventListener('click', () => settingsModal.manualExchangeKite());
   }
 
   // Switch to Simulator Button

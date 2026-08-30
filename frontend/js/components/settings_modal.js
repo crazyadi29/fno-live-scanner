@@ -6,11 +6,26 @@ class SettingsModal {
   }
 
   open() {
-    if (this.modal) this.modal.classList.remove('hidden');
+    if (this.modal) {
+      this.modal.classList.remove('hidden');
+      this.updateRedirectUriLabels();
+    }
   }
 
   close() {
     if (this.modal) this.modal.classList.add('hidden');
+  }
+
+  updateRedirectUriLabels() {
+    const currentOrigin = window.location.origin;
+    const fyersCb = `${currentOrigin}/api/auth/fyers/callback`;
+    const kiteCb = `${currentOrigin}/api/auth/kite/callback`;
+
+    const elFyersCb = document.getElementById('fyers-redirect-uri-display');
+    const elKiteCb = document.getElementById('kite-redirect-uri-display');
+
+    if (elFyersCb) elFyersCb.innerText = fyersCb;
+    if (elKiteCb) elKiteCb.innerText = kiteCb;
   }
 
   loadSavedCredentials() {
@@ -46,10 +61,6 @@ class SettingsModal {
     window.addEventListener('message', (event) => {
       if (event.data && event.data.type === 'BROKER_CONNECTED') {
         const broker = event.data.broker;
-        const token = event.data.token;
-        console.log(`Broker ${broker} connected with auto-token!`);
-        
-        // Show celebratory toast / banner
         const modeBadge = document.getElementById('mode-badge');
         if (modeBadge) modeBadge.innerText = broker.toUpperCase();
 
@@ -68,12 +79,18 @@ class SettingsModal {
   }
 
   async launchFyersOneClickLogin() {
-    const appId = document.getElementById('fyers-app-id')?.value.trim();
+    let appId = document.getElementById('fyers-app-id')?.value.trim();
     const appSecret = document.getElementById('fyers-app-secret')?.value.trim();
 
     if (!appId || !appSecret) {
       alert("Please enter your Fyers App ID and Secret Key first.");
       return;
+    }
+
+    if (!appId.endsWith("-100") && !appId.includes("-") && appId.length > 2) {
+      appId = appId + "-100";
+      const el = document.getElementById('fyers-app-id');
+      if (el) el.value = appId;
     }
 
     this.saveFormCredentials();
@@ -90,6 +107,40 @@ class SettingsModal {
       }
     } catch (e) {
       alert("Error initiating Fyers login: " + e.message);
+    }
+  }
+
+  async manualExchangeFyers() {
+    const appId = document.getElementById('fyers-app-id')?.value.trim();
+    const appSecret = document.getElementById('fyers-app-secret')?.value.trim();
+    const authCodeInput = document.getElementById('fyers-manual-code')?.value.trim();
+
+    if (!authCodeInput) {
+      alert("Please paste the redirected URL or auth_code from your browser.");
+      return;
+    }
+
+    try {
+      const resp = await fetch('/api/auth/fyers/exchange-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app_id: appId,
+          app_secret: appSecret,
+          auth_code: authCodeInput
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.status === 'success') {
+        alert("🎉 Fyers Connected Successfully!");
+        const modeBadge = document.getElementById('mode-badge');
+        if (modeBadge) modeBadge.innerText = 'FYERS';
+        this.close();
+      } else {
+        alert("Exchange error: " + (data.detail || JSON.stringify(data)));
+      }
+    } catch (e) {
+      alert("Exchange failed: " + e.message);
     }
   }
 
@@ -116,6 +167,40 @@ class SettingsModal {
       }
     } catch (e) {
       alert("Error initiating Kite login: " + e.message);
+    }
+  }
+
+  async manualExchangeKite() {
+    const apiKey = document.getElementById('kite-api-key')?.value.trim();
+    const apiSecret = document.getElementById('kite-api-secret')?.value.trim();
+    const reqTokenInput = document.getElementById('kite-manual-code')?.value.trim();
+
+    if (!reqTokenInput) {
+      alert("Please paste the redirected URL or request_token from your browser.");
+      return;
+    }
+
+    try {
+      const resp = await fetch('/api/auth/kite/exchange-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: apiKey,
+          api_secret: apiSecret,
+          request_token: reqTokenInput
+        })
+      });
+      const data = await resp.json();
+      if (resp.ok && data.status === 'success') {
+        alert("🎉 Zerodha Kite Connected Successfully!");
+        const modeBadge = document.getElementById('mode-badge');
+        if (modeBadge) modeBadge.innerText = 'KITE';
+        this.close();
+      } else {
+        alert("Exchange error: " + (data.detail || JSON.stringify(data)));
+      }
+    } catch (e) {
+      alert("Exchange failed: " + e.message);
     }
   }
 
