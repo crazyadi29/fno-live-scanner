@@ -3,12 +3,13 @@ import json
 import os
 import hashlib
 import logging
+import zipfile
 import requests
 from typing import List, Dict, Any, Set, Optional
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request, Response
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 
 from backend.config import settings
@@ -38,7 +39,6 @@ adapters = {
     "kite": KiteAdapter()
 }
 
-# Saved broker app credentials for 1-click token exchange
 stored_broker_credentials = {
     "fyers": {"app_id": "", "app_secret": "", "access_token": ""},
     "kite": {"api_key": "", "api_secret": "", "access_token": ""}
@@ -137,6 +137,11 @@ async def shutdown_event():
     for adp in adapters.values():
         await adp.stop()
 
+# Health check for cloud platforms
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "FnO Pulse Live Scanner"}
+
 # WebSocket Endpoint
 @app.websocket("/ws/scanner")
 async def websocket_endpoint(websocket: WebSocket):
@@ -159,25 +164,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/api/auth/fyers/login-url")
 async def get_fyers_login_url(request: Request, app_id: str, app_secret: str):
-    """Generates 1-click Fyers OAuth URL and stores app_id & secret"""
     stored_broker_credentials["fyers"]["app_id"] = app_id.strip()
     stored_broker_credentials["fyers"]["app_secret"] = app_secret.strip()
     
-    # Construct callback URL on current host (supports localhost and ngrok HTTPS)
     base_url = str(request.base_url).rstrip("/")
-    # If forwarded by proxy/ngrok with https
     forwarded_proto = request.headers.get("x-forwarded-proto", "")
     if forwarded_proto == "https" and base_url.startswith("http://"):
         base_url = "https://" + base_url[7:]
 
     redirect_uri = f"{base_url}/api/auth/fyers/callback"
-    
     auth_url = f"https://api-t1.fyers.in/api/v3/generate-authcode?client_id={app_id}&redirect_uri={redirect_uri}&response_type=code&state=fno_pulse"
     return {"auth_url": auth_url, "redirect_uri": redirect_uri}
 
 @app.get("/api/auth/fyers/callback")
 async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None, code: Optional[str] = None):
-    """Automatic background callback from Fyers login to exchange code for token"""
     global active_adapter_name
     received_code = auth_code or code or request.query_params.get("auth_code") or request.query_params.get("code")
     if not received_code:
@@ -189,10 +189,8 @@ async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None
     if not app_id or not app_secret:
         return HTMLResponse("<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ App ID or Secret missing. Please start from Settings again.</h2>")
     
-    # Calculate SHA256 appIdHash
     app_id_hash = hashlib.sha256(f"{app_id}:{app_secret}".encode('utf-8')).hexdigest()
     
-    # Exchange code for access token with Fyers API
     token_url = "https://api-t1.fyers.in/api/v3/validate-authcode"
     payload = {
         "grant_type": "authorization_code",
@@ -236,7 +234,6 @@ async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None
 
 @app.get("/api/auth/kite/login-url")
 async def get_kite_login_url(request: Request, api_key: str, api_secret: str):
-    """Generates 1-click Kite OAuth URL and stores credentials"""
     stored_broker_credentials["kite"]["api_key"] = api_key.strip()
     stored_broker_credentials["kite"]["api_secret"] = api_secret.strip()
     auth_url = f"https://kite.zerodha.com/connect/login?v=3&api_key={api_key}"
@@ -244,7 +241,6 @@ async def get_kite_login_url(request: Request, api_key: str, api_secret: str):
 
 @app.get("/api/auth/kite/callback")
 async def kite_oauth_callback(request: Request, request_token: Optional[str] = None, status: Optional[str] = None):
-    """Automatic background callback from Kite login to exchange request_token for access_token"""
     global active_adapter_name
     req_token = request_token or request.query_params.get("request_token")
     if not req_token:
@@ -256,7 +252,6 @@ async def kite_oauth_callback(request: Request, request_token: Optional[str] = N
     if not api_key or not api_secret:
         return HTMLResponse("<h2 style='color:red;font-family:sans-serif;text-align:center;padding:50px;'>❌ API Key or Secret missing. Please start from Settings again.</h2>")
     
-    # Calculate SHA256 checksum = sha256(api_key + request_token + api_secret)
     checksum = hashlib.sha256(f"{api_key}{req_token}{api_secret}".encode('utf-8')).hexdigest()
     
     token_url = "https://api.kite.trade/session/token"
@@ -304,10 +299,18 @@ async def kite_oauth_callback(request: Request, request_token: Optional[str] = N
 
 @app.get("/download-zip")
 async def download_project_zip():
-    zip_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "fno_pulse_scanner_full.zip"))
-    if os.path.exists(zip_path):
-        return FileResponse(zip_path, filename="fno_pulse_scanner.zip", media_type="application/zip")
-    raise HTTPException(status_code=404, detail="Zip file not found")
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    zip_path = os.path.join(base_dir, "fno_pulse_scanner_full.zip")
+    if not os.path.exists(zip_path):
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for root, dirs, files in os.walk(base_dir):
+                if any(x in root for x in ["__pycache__", "venv", ".git"]):
+                    continue
+                for file in files:
+                    if not file.endswith(".zip"):
+                        fpath = os.path.join(root, file)
+                        zipf.write(fpath, os.path.relpath(fpath, base_dir))
+    return FileResponse(zip_path, filename="fno_pulse_scanner.zip", media_type="application/zip")
 
 @app.get("/api/status")
 async def get_status():
@@ -395,7 +398,7 @@ async def trigger_simulator_surge(req: TriggerSurgeRequest):
             return {"status": "success", "message": f"Injected {req.surge_pct}% {req.side} surge on {req.symbol} {req.strike}"}
     raise HTTPException(status_code=400, detail="Simulator not active")
 
-# Serve Frontend static assets
+# Serve Frontend static assets and index.html
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
