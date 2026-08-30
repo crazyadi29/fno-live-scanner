@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FnO Pulse — Live Option Breakout & OI Scanner</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              main: '#0B0E14',
+              card: '#121824',
+              border: '#1E293B',
+              bullish: '#00E676',
+              bearish: '#FF1744',
+              cyan: '#00E5FF'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-[#0B0E14] text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-black">
+
+  <!-- TOP APP HEADER -->
+  <header class="sticky top-0 z-40 bg-[#0B0E14]/90 backdrop-blur-md border-b border-slate-800">
+    <div class="max-w-[1600px] mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center space-x-4">
+        <div class="flex items-center space-x-2">
+          <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 via-emerald-400 to-indigo-500 flex items-center justify-center font-black text-black text-lg shadow-lg shadow-cyan-500/20">
+            ⚡
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h1 class="text-base font-black tracking-tight text-white font-mono">FNO PULSE</h1>
+              <span class="text-[10px] uppercase font-bold tracking-widest px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800">PRO SCANNER</span>
+            </div>
+            <p class="text-[11px] text-slate-400 font-medium">Spider-Style Live OI & Heavy Writer Breakout Engine</p>
+          </div>
+        </div>
+
+        <div class="h-6 w-[1px] bg-slate-800 hidden sm:block"></div>
+
+        <!-- Connection & Feed Mode -->
+        <div class="hidden sm:flex items-center space-x-3">
+          <div id="connection-status-badge" class="flex items-center space-x-2 bg-slate-900/90 px-3 py-1 rounded-full border border-slate-800">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 live-dot"></span>
+            <span class="text-xs font-bold text-emerald-400 font-mono">LIVE FEED CONNECTED</span>
+          </div>
+
+          <div class="flex items-center space-x-1.5 bg-slate-900/90 px-3 py-1 rounded-full border border-slate-800 text-xs font-mono">
+            <span class="text-slate-500">FEED:</span>
+            <span id="mode-badge" class="font-bold text-cyan-400 uppercase">SIMULATOR</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Controls -->
+      <div class="flex items-center space-x-3">
+        <!-- Direct Download ZIP Button -->
+        <a href="/download-zip" download="fno_pulse_scanner.zip" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/40 transition text-xs font-bold font-mono">
+          <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          <span>Download Code ZIP</span>
+        </a>
+
+        <!-- Sound Toggle -->
+        <button id="sound-toggle-btn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 transition text-slate-300">
+          <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"></path>
+          </svg>
+          <span class="text-xs font-semibold">Sound ON</span>
+        </button>
+
+        <!-- Instant Test Surge -->
+        <button id="open-sim-surge-btn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition text-xs font-bold font-mono">
+          <span>⚡ Trigger Test Surge</span>
+        </button>
+
+        <!-- Settings & Broker Modal Trigger -->
+        <button id="open-settings-btn" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-black font-black transition text-xs shadow-lg shadow-cyan-600/20">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+          <span>Connect Broker & 1-Click Login</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <main class="max-w-[1600px] mx-auto px-4 py-6 space-y-6">
+
+    <!-- 1. LIVE BREAKOUT & HIGH OI SQUEEZE ALERTS (HERO CARDS) -->
+    <section>
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping"></span>
+          <h2 class="text-sm font-black uppercase tracking-wider text-white">
+            Live Breakout Direct Option Strikes
+          </h2>
+          <span class="text-xs text-slate-400 font-normal">
+            (Triggered when Stock Momentum + Heavy Sellers Nearby + >100% PE/CE OI Writing)
+          </span>
+        </div>
+      </div>
+
+      <!-- Alert Deck Grid -->
+      <div id="alert-deck-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Injected dynamically by AlertDeck -->
+      </div>
+    </section>
+
+    <!-- 2. LIVE FNO SCANNER TABLE -->
+    <section class="glass-panel rounded-xl border border-slate-800 p-5 shadow-2xl">
+      
+      <!-- Toolbar & Filters -->
+      <div class="flex flex-wrap items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-800">
+        
+        <!-- Strategy Filter Tabs -->
+        <div class="flex flex-wrap items-center gap-1.5 text-xs font-semibold">
+          <button data-filter="ALL" class="filter-btn px-3 py-1.5 rounded-lg bg-cyan-500 text-black font-black transition">
+            All Stocks (16)
+          </button>
+          <button data-filter="BULLISH_BREAKOUT" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition flex items-center space-x-1">
+            <span>🔥 Bullish Breakouts</span>
+          </button>
+          <button data-filter="PE_OI_SURGE" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            📈 PE OI > 100% Surge
+          </button>
+          <button data-filter="CE_OI_SURGE" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            📉 CE OI > 100% Surge
+          </button>
+          <button data-filter="VOLUME_SURGE" class="filter-btn px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+            ⚡ Vol Surge (>2x)
+          </button>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative w-64">
+          <input id="stock-search-input" type="text" placeholder="Search FnO Symbol (e.g. RELIANCE)..." 
+                 class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono uppercase">
+        </div>
+      </div>
+
+      <!-- Scanner Table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="text-[11px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-800 bg-slate-900/40">
+              <th class="py-3 px-4">Symbol & OI Surge</th>
+              <th class="py-3 px-4 text-right">Spot LTP (Chg %)</th>
+              <th class="py-3 px-4">Technicals (VWAP / RSI)</th>
+              <th class="py-3 px-4 text-center">Vol Multiplier</th>
+              <th class="py-3 px-4">Call Wall (Resistance)</th>
+              <th class="py-3 px-4">Put Wall (Support)</th>
+              <th class="py-3 px-4 text-center">PCR</th>
+              <th class="py-3 px-4 text-center">Momentum</th>
+              <th class="py-3 px-4 text-right">Inspect</th>
+            </tr>
+          </thead>
+          <tbody id="scanner-table-body">
+            <!-- Populated dynamically by ScannerTable -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 3. DEEP OI MATRIX & OPTION CHAIN SECTION -->
+    <section id="oi-matrix-section">
+      <div id="oi-matrix-container">
+        <!-- Populated dynamically by OIMatrix -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BROKER CONFIG & 1-CLICK SETTINGS MODAL -->
+  <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm hidden">
+    <div class="bg-[#121824] border border-slate-700 rounded-2xl w-full max-w-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-800">
+        <div class="flex items-center space-x-2">
+          <span class="text-xl">⚡</span>
+          <h3 class="text-lg font-black text-white">Broker Connection & 1-Click Auto-Login</h3>
+        </div>
+        <button id="close-settings-btn" class="text-slate-400 hover:text-white text-lg font-bold">✕</button>
+      </div>
+
+      <!-- Settings Body -->
+      <div class="space-y-6 text-xs">
+
+        <!-- 1. Fyers 1-Click Auto Token -->
+        <div class="p-4 rounded-xl bg-slate-900/90 border border-cyan-500/30 space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+              <span class="text-base font-bold text-cyan-400">🟢 Fyers API (v3) — 1-Click Auto Login</span>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 font-bold border border-cyan-800">RECOMMENDED</span>
+          </div>
+          <p class="text-slate-400 text-[11px]">Enter your App ID and Secret once. Each morning, just click the button below to authenticate with PIN/OTP — the daily token is generated and connected automatically!</p>
+          
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-slate-400 mb-1">Fyers App ID (e.g. XC12345-100)</label>
+              <input id="fyers-app-id" type="text" placeholder="XC12345-100" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Fyers Secret Key</label>
+              <input id="fyers-app-secret" type="password" placeholder="Fyers Secret Key" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+            </div>
+          </div>
+
+          <button id="btn-fyers-1click" type="button" class="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-black text-sm rounded-lg shadow-lg shadow-cyan-500/20 transition flex items-center justify-center space-x-2">
+            <span>⚡ 1-Click Fyers Login & Auto-Generate Token</span>
+          </button>
+        </div>
+
+        <!-- 2. Zerodha Kite 1-Click Auto Token -->
+        <div class="p-4 rounded-xl bg-slate-900/90 border border-orange-500/30 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-base font-bold text-orange-400">🟠 Zerodha Kite Connect — 1-Click Auto Login</span>
+          </div>
+          <p class="text-slate-400 text-[11px]">Enter your Kite API Key and Secret. Click the button to log in with Zerodha 2FA — your daily access token will be exchanged and connected automatically!</p>
+          
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-slate-400 mb-1">Kite API Key</label>
+              <input id="kite-api-key" type="text" placeholder="Kite API Key" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Kite API Secret</label>
+              <input id="kite-api-secret" type="password" placeholder="Kite API Secret" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+            </div>
+          </div>
+
+          <button id="btn-kite-1click" type="button" class="w-full py-2.5 bg-gradient-to-r from-orange-500 to-amber-400 hover:from-orange-400 hover:to-amber-300 text-black font-black text-sm rounded-lg shadow-lg shadow-orange-500/20 transition flex items-center justify-center space-x-2">
+            <span>⚡ 1-Click Kite Login & Auto-Generate Token</span>
+          </button>
+        </div>
+
+        <!-- 3. Offline / Weekend Simulator Mode -->
+        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+          <div>
+            <span class="font-bold text-white">Built-in High-Fidelity Market Simulator</span>
+            <p class="text-slate-400 text-[11px]">Generate live ticks, 100%+ OI spikes, and realistic option chains 24/7 without logging in.</p>
+          </div>
+          <button id="switch-sim-btn" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-lg border border-slate-700 transition">
+            Use Simulator
+          </button>
+        </div>
+
+        <!-- 4. Strategy Thresholds Configuration -->
+        <form id="thresholds-form" class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-4">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-sm text-emerald-400 uppercase tracking-wide">Scanner Strategy Thresholds</h4>
+            <button type="submit" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-black font-black rounded-lg">
+              Save Thresholds
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-slate-400 mb-1">PE OI Surge Threshold (%)</label>
+              <input id="thresh-pe-oi" type="number" step="5" value="100" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+              <span class="text-[10px] text-slate-500">Triggers breakout signal when PE OI changes > X%</span>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">CE OI Surge Threshold (%)</label>
+              <input id="thresh-ce-oi" type="number" step="5" value="100" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+              <span class="text-[10px] text-slate-500">Triggers resistance signal when CE OI changes > X%</span>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Volume Surge Multiplier</label>
+              <input id="thresh-vol-mult" type="number" step="0.5" value="2.5" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+              <span class="text-[10px] text-slate-500">Current volume relative to 20-MA</span>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Seller Wall Proximity (%)</label>
+              <input id="thresh-prox-pct" type="number" step="0.5" value="2.0" class="w-full bg-slate-950 border border-slate-700 rounded p-2 text-white font-mono">
+              <span class="text-[10px] text-slate-500">Maximum distance to Call/Put seller wall</span>
+            </div>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/js/components/alert_deck.js"></script>
+  <script src="/js/components/scanner_table.js"></script>
+  <script src="/js/components/oi_matrix.js"></script>
+  <script src="/js/components/settings_modal.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
