@@ -101,9 +101,9 @@ class TechnicalEngine:
         
         # Day Range & Breakout Proximity
         day_range = max(0.01, high_p - low_p)
-        pos_in_range = round(((ltp - low_p) / day_range) * 100.0, 1)
-        dist_to_high_pct = round(((high_p - ltp) / ltp) * 100.0, 2)
-        is_near_day_high = dist_to_high_pct <= 0.4
+        pos_in_range = round(((ltp - low_p) / day_range) * 100.0, 1) if ltp > 0 else 0.0
+        dist_to_high_pct = round(((high_p - ltp) / ltp) * 100.0, 2) if ltp > 0 else 0.0
+        is_near_day_high = dist_to_high_pct <= 0.4 if ltp > 0 else False
         
         # Trend and Momentum Evaluation
         is_above_vwap = ltp >= vwap
@@ -154,3 +154,4 @@ class TechnicalEngine:
             "momentum_score": bullish_score,
             "signal_color": signal_color
         }
+
