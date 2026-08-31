@@ -129,7 +129,9 @@ async def scanner_broadcast_loop():
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Starting adapters...")
     await adapters["simulator"].start()
+    logger.info(f"Active adapter on startup: {active_adapter_name}")
     asyncio.create_task(scanner_broadcast_loop())
 
 @app.on_event("shutdown")
@@ -221,10 +223,17 @@ async def manual_fyers_token_exchange(payload: Dict[str, str]):
         access_token = data.get("access_token")
         if access_token:
             stored_broker_credentials["fyers"]["access_token"] = access_token
+            # Stop simulator and other adapters
+            logger.info("Stopping simulator and other adapters...")
+            await adapters["simulator"].stop()
+            await adapters["kite"].stop()
+            # Start Fyers
             adapters["fyers"].update_credentials({"app_id": app_id, "access_token": access_token})
             await adapters["fyers"].start()
+            await asyncio.sleep(0.5)  # Give Fyers time to start polling
             active_adapter_name = "fyers"
-            return {"status": "success", "access_token": access_token, "message": "Fyers connected successfully!"}
+            logger.info(f"✅ Switched to Fyers adapter")
+            return {"status": "success", "access_token": access_token, "message": "Fyers connected successfully!", "adapter": "fyers"}
         else:
             raise HTTPException(status_code=400, detail=f"Fyers Token Error: {resp.text}")
     except Exception as e:
@@ -258,8 +267,13 @@ async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None
         
         if access_token:
             stored_broker_credentials["fyers"]["access_token"] = access_token
+            # Stop simulator and other adapters
+            await adapters["simulator"].stop()
+            await adapters["kite"].stop()
+            # Start Fyers
             adapters["fyers"].update_credentials({"app_id": app_id, "access_token": access_token})
             await adapters["fyers"].start()
+            await asyncio.sleep(0.5)
             active_adapter_name = "fyers"
             
             return HTMLResponse("""
@@ -323,10 +337,16 @@ async def manual_kite_token_exchange(payload: Dict[str, str]):
         access_token = data.get("data", {}).get("access_token")
         if access_token:
             stored_broker_credentials["kite"]["access_token"] = access_token
+            # Stop simulator and other adapters
+            await adapters["simulator"].stop()
+            await adapters["fyers"].stop()
+            # Start Kite
             adapters["kite"].update_credentials({"api_key": api_key, "access_token": access_token})
             await adapters["kite"].start()
+            await asyncio.sleep(0.5)
             active_adapter_name = "kite"
-            return {"status": "success", "access_token": access_token, "message": "Zerodha Kite connected successfully!"}
+            logger.info(f"✅ Switched to Kite adapter")
+            return {"status": "success", "access_token": access_token, "message": "Zerodha Kite connected successfully!", "adapter": "kite"}
         else:
             raise HTTPException(status_code=400, detail=f"Kite Token Error: {resp.text}")
     except Exception as e:
@@ -360,8 +380,13 @@ async def kite_oauth_callback(request: Request, request_token: Optional[str] = N
         
         if access_token:
             stored_broker_credentials["kite"]["access_token"] = access_token
+            # Stop simulator and other adapters
+            await adapters["simulator"].stop()
+            await adapters["fyers"].stop()
+            # Start Kite
             adapters["kite"].update_credentials({"api_key": api_key, "access_token": access_token})
             await adapters["kite"].start()
+            await asyncio.sleep(0.5)
             active_adapter_name = "kite"
             
             return HTMLResponse("""
@@ -407,10 +432,20 @@ async def download_project_zip():
 @app.get("/api/status")
 async def get_status():
     adapter = adapters.get(active_adapter_name)
+    cache_size = {}
+    for name, adp in adapters.items():
+        if name == "simulator":
+            cache_size[name] = len(adp._stocks) if hasattr(adp, '_stocks') else 0
+        elif name == "fyers":
+            cache_size[name] = len(adp._cache) if hasattr(adp, '_cache') else 0
+        elif name == "kite":
+            cache_size[name] = len(adp._cache) if hasattr(adp, '_cache') else 0
+    
     return {
         "active_adapter": active_adapter_name,
         "is_connected": adapter.is_connected if adapter else False,
         "active_clients": len(manager.active_connections),
+        "cache_status": cache_size,
         "thresholds": {
             "pe_surge_threshold": scanner.pe_surge_threshold,
             "ce_surge_threshold": scanner.ce_surge_threshold,
@@ -444,10 +479,14 @@ async def switch_adapter(req: SwitchAdapterRequest):
     if req.adapter not in adapters:
         raise HTTPException(status_code=400, detail="Invalid adapter name")
     if active_adapter_name != req.adapter:
+        logger.info(f"Switching from {active_adapter_name} to {req.adapter}")
         await adapters[active_adapter_name].stop()
+        await asyncio.sleep(0.2)
         active_adapter_name = req.adapter
         await adapters[active_adapter_name].start()
-    return {"status": "success", "active_adapter": active_adapter_name}
+        await asyncio.sleep(0.5)
+        logger.info(f"✅ Switched to {req.adapter} adapter")
+    return {"status": "success", "active_adapter": active_adapter_name, "is_connected": adapters[active_adapter_name].is_connected}
 
 @app.post("/api/credentials")
 async def update_credentials(req: CredentialsRequest):
@@ -494,3 +533,4 @@ async def trigger_simulator_surge(req: TriggerSurgeRequest):
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
