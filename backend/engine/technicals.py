@@ -84,6 +84,31 @@ class TechnicalEngine:
     @staticmethod
     def evaluate_technicals(symbol: str, ltp: float, open_p: float, high_p: float, low_p: float,
                             prev_close: float, candle_history: List[Dict[str, float]]) -> Dict[str, Any]:
+        # Guard against zero/invalid ltp
+        if ltp <= 0:
+            return {
+                "symbol": symbol,
+                "ltp": ltp,
+                "open": open_p,
+                "high": high_p,
+                "low": low_p,
+                "prev_close": prev_close,
+                "change_pts": 0.0,
+                "change_pct": 0.0,
+                "vwap": 0.0,
+                "ema9": 0.0,
+                "ema21": 0.0,
+                "rsi": 50.0,
+                "volume_surge": {"surge_ratio": 1.0, "is_surge": False, "avg_vol": 0, "curr_vol": 0},
+                "dist_to_high_pct": 0.0,
+                "pos_in_range_pct": 0.0,
+                "is_near_day_high": False,
+                "is_above_vwap": False,
+                "momentum": "NEUTRAL",
+                "momentum_score": 0,
+                "signal_color": "#B0BEC5"
+            }
+        
         closes = [c['close'] for c in candle_history] if candle_history else [ltp]
         volumes = [c['volume'] for c in candle_history] if candle_history else [1000]
         
@@ -154,3 +179,4 @@ class TechnicalEngine:
             "momentum_score": bullish_score,
             "signal_color": signal_color
         }
+
