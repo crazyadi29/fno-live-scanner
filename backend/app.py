@@ -5,6 +5,7 @@ import hashlib
 import logging
 import zipfile
 import requests
+import traceback
 from typing import List, Dict, Any, Set, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
@@ -91,25 +92,33 @@ async def scanner_broadcast_loop():
                 all_surges = []
 
                 for snap in snapshots:
-                    result = scanner.scan_stock(snap)
-                    scanned_results.append({
-                        "symbol": result["symbol"],
-                        "ltp": result["technicals"]["ltp"],
-                        "change_pct": result["technicals"]["change_pct"],
-                        "change_pts": result["technicals"]["change_pts"],
-                        "vwap": result["technicals"]["vwap"],
-                        "rsi": result["technicals"]["rsi"],
-                        "ema9": result["technicals"]["ema9"],
-                        "ema21": result["technicals"]["ema21"],
-                        "momentum": result["technicals"]["momentum"],
-                        "volume_surge": result["technicals"]["volume_surge"],
-                        "oi_summary": result["oi_summary"],
-                    })
+                    try:
+                        # Skip if snapshot has no candle history or invalid structure
+                        if not snap.get("candle_history") or not snap.get("strikes"):
+                            continue
+                        
+                        result = scanner.scan_stock(snap)
+                        scanned_results.append({
+                            "symbol": result["symbol"],
+                            "ltp": result["technicals"]["ltp"],
+                            "change_pct": result["technicals"]["change_pct"],
+                            "change_pts": result["technicals"]["change_pts"],
+                            "vwap": result["technicals"]["vwap"],
+                            "rsi": result["technicals"]["rsi"],
+                            "ema9": result["technicals"]["ema9"],
+                            "ema21": result["technicals"]["ema21"],
+                            "momentum": result["technicals"]["momentum"],
+                            "volume_surge": result["technicals"]["volume_surge"],
+                            "oi_summary": result["oi_summary"],
+                        })
 
-                    if result["breakout_signals"]:
-                        all_signals.extend(result["breakout_signals"])
-                    if result["surge_strikes"]:
-                        all_surges.extend(result["surge_strikes"])
+                        if result["breakout_signals"]:
+                            all_signals.extend(result["breakout_signals"])
+                        if result["surge_strikes"]:
+                            all_surges.extend(result["surge_strikes"])
+                    except Exception as snap_err:
+                        logger.warning(f"Error scanning {snap.get('symbol', 'UNKNOWN')}: {snap_err}")
+                        continue
 
                 payload = {
                     "type": "SCANNER_UPDATE",
@@ -124,12 +133,15 @@ async def scanner_broadcast_loop():
                 await manager.broadcast(payload)
         except Exception as e:
             logger.error(f"Error in scanner broadcast loop: {e}")
+            logger.error(traceback.format_exc())
             
         await asyncio.sleep(settings.SCAN_INTERVAL_MS / 1000.0)
 
 @app.on_event("startup")
 async def startup_event():
+    logger.info("Starting adapters...")
     await adapters["simulator"].start()
+    logger.info(f"Active adapter on startup: {active_adapter_name}")
     asyncio.create_task(scanner_broadcast_loop())
 
 @app.on_event("shutdown")
@@ -159,8 +171,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception:
         manager.disconnect(websocket)
 
-# ----------------- 1-CLICK AUTO TOKEN OAUTH FLOWS -----------------
-
+# Rest of the endpoints remain the same...
 @app.get("/api/auth/fyers/login-url")
 async def get_fyers_login_url(request: Request, app_id: str, app_secret: str, redirect_uri: Optional[str] = None):
     app_id = app_id.strip()
@@ -187,7 +198,6 @@ async def get_fyers_login_url(request: Request, app_id: str, app_secret: str, re
 
 @app.post("/api/auth/fyers/exchange-token")
 async def manual_fyers_token_exchange(payload: Dict[str, str]):
-    """Exchange auth_code or full redirected URL for access token manually if redirect was to external page"""
     global active_adapter_name
     app_id = payload.get("app_id", stored_broker_credentials["fyers"]["app_id"]).strip()
     app_secret = payload.get("app_secret", stored_broker_credentials["fyers"]["app_secret"]).strip()
@@ -196,7 +206,6 @@ async def manual_fyers_token_exchange(payload: Dict[str, str]):
     if not app_id.endswith("-100") and "-" not in app_id and len(app_id) > 2:
         app_id = f"{app_id}-100"
 
-    # Extract auth_code if full URL was pasted
     if "auth_code=" in auth_code_input:
         import urllib.parse
         parsed = urllib.parse.urlparse(auth_code_input)
@@ -221,10 +230,14 @@ async def manual_fyers_token_exchange(payload: Dict[str, str]):
         access_token = data.get("access_token")
         if access_token:
             stored_broker_credentials["fyers"]["access_token"] = access_token
+            await adapters["simulator"].stop()
+            await adapters["kite"].stop()
             adapters["fyers"].update_credentials({"app_id": app_id, "access_token": access_token})
             await adapters["fyers"].start()
+            await asyncio.sleep(0.5)
             active_adapter_name = "fyers"
-            return {"status": "success", "access_token": access_token, "message": "Fyers connected successfully!"}
+            logger.info("✅ Switched to Fyers adapter")
+            return {"status": "success", "access_token": access_token, "message": "Fyers connected successfully!", "adapter": "fyers"}
         else:
             raise HTTPException(status_code=400, detail=f"Fyers Token Error: {resp.text}")
     except Exception as e:
@@ -258,8 +271,11 @@ async def fyers_oauth_callback(request: Request, auth_code: Optional[str] = None
         
         if access_token:
             stored_broker_credentials["fyers"]["access_token"] = access_token
+            await adapters["simulator"].stop()
+            await adapters["kite"].stop()
             adapters["fyers"].update_credentials({"app_id": app_id, "access_token": access_token})
             await adapters["fyers"].start()
+            await asyncio.sleep(0.5)
             active_adapter_name = "fyers"
             
             return HTMLResponse("""
@@ -323,10 +339,14 @@ async def manual_kite_token_exchange(payload: Dict[str, str]):
         access_token = data.get("data", {}).get("access_token")
         if access_token:
             stored_broker_credentials["kite"]["access_token"] = access_token
+            await adapters["simulator"].stop()
+            await adapters["fyers"].stop()
             adapters["kite"].update_credentials({"api_key": api_key, "access_token": access_token})
             await adapters["kite"].start()
+            await asyncio.sleep(0.5)
             active_adapter_name = "kite"
-            return {"status": "success", "access_token": access_token, "message": "Zerodha Kite connected successfully!"}
+            logger.info("✅ Switched to Kite adapter")
+            return {"status": "success", "access_token": access_token, "message": "Zerodha Kite connected successfully!", "adapter": "kite"}
         else:
             raise HTTPException(status_code=400, detail=f"Kite Token Error: {resp.text}")
     except Exception as e:
@@ -360,8 +380,11 @@ async def kite_oauth_callback(request: Request, request_token: Optional[str] = N
         
         if access_token:
             stored_broker_credentials["kite"]["access_token"] = access_token
+            await adapters["simulator"].stop()
+            await adapters["fyers"].stop()
             adapters["kite"].update_credentials({"api_key": api_key, "access_token": access_token})
             await adapters["kite"].start()
+            await asyncio.sleep(0.5)
             active_adapter_name = "kite"
             
             return HTMLResponse("""
@@ -386,8 +409,6 @@ async def kite_oauth_callback(request: Request, request_token: Optional[str] = N
             return HTMLResponse(f"<div style='background:#0B0E14;color:#FF1744;font-family:system-ui;padding:40px;text-align:center;'><h2>❌ Token Exchange Failed</h2><p style='color:#94A3B8;font-family:monospace;'>{resp.text}</p></div>")
     except Exception as e:
         return HTMLResponse(f"<div style='background:#0B0E14;color:#FF1744;font-family:system-ui;padding:40px;text-align:center;'><h2>❌ Error</h2><p>{str(e)}</p></div>")
-
-# ----------------- REST & FILE DOWNLOAD ENDPOINTS -----------------
 
 @app.get("/download-zip")
 async def download_project_zip():
@@ -494,3 +515,4 @@ async def trigger_simulator_surge(req: TriggerSurgeRequest):
 frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend"))
 if os.path.exists(frontend_path):
     app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")
+
