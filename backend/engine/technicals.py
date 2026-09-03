@@ -102,7 +102,7 @@ class TechnicalEngine:
         # Day Range & Breakout Proximity
         day_range = max(0.01, high_p - low_p)
         pos_in_range = round(((ltp - low_p) / day_range) * 100.0, 1)
-        dist_to_high_pct = round(((high_p - ltp) / ltp) * 100.0, 2)
+        dist_to_high_pct = round(((high_p - ltp) / ltp) * 100.0, 2) if ltp > 0 else 0.0
         is_near_day_high = dist_to_high_pct <= 0.4
         
         # Trend and Momentum Evaluation
@@ -126,7 +126,7 @@ class TechnicalEngine:
             momentum = "BULLISH_MILD"
             signal_color = "#69F0AE"
         elif rsi <= 42 and ltp < vwap and change_pct < -0.5:
-            momentum = "BEARISH_BREAKDOWN" if (ltp - low_p)/ltp < 0.004 and vol_surge["is_surge"] else "BEARISH_STRONG"
+            momentum = "BEARISH_BREAKDOWN" if (ltp > 0 and (ltp - low_p)/ltp < 0.004 and vol_surge["is_surge"]) else "BEARISH_STRONG"
             signal_color = "#FF1744" # Bright Red
         else:
             momentum = "NEUTRAL"
