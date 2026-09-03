@@ -63,6 +63,7 @@ class FyersAdapter(BaseBrokerAdapter):
             resp = requests.get(url, headers=self._get_headers(), params=params, timeout=4)
             if resp.status_code == 200:
                 data = resp.json()
+                logger.warning(f"RAW FYERS RESPONSE for {symbol}: {json.dumps(data)[:1500]}")
                 return self._parse_fyers_chain(symbol, data)
             else:
                 logger.error(f"Fyers API HTTP {resp.status_code} for {symbol}: {resp.text[:200]}")
