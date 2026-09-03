@@ -25,6 +25,8 @@ class BreakoutScanner:
         """
         symbol = stock_snapshot["symbol"]
         ltp = float(stock_snapshot["ltp"])
+        if ltp <= 0:
+            return {"symbol": symbol, "timestamp": int(time.time()), "skipped": True, "reason": "invalid_ltp"}
         open_p = float(stock_snapshot.get("open", ltp))
         high_p = float(stock_snapshot.get("high", ltp))
         low_p = float(stock_snapshot.get("low", ltp))
@@ -98,7 +100,7 @@ class BreakoutScanner:
             # --- STRATEGY 1: Bullish Momentum + Heavy CE Wall Nearby + PE OI Surge > 100% ---
             if is_bullish_momentum and pe_chg_pct >= self.pe_surge_threshold and is_nearby:
                 # Find the target CE option contract to trade
-                target_ce_strike = ce_wall if (ce_wall and abs(ce_wall - ltp)/ltp <= 0.03) else strike
+                target_ce_strike = ce_wall if (ce_wall and ltp > 0 and abs(ce_wall - ltp)/ltp <= 0.03) else strike
                 
                 # Fetch target strike LTP
                 target_ltp = 0.0
@@ -134,7 +136,7 @@ class BreakoutScanner:
 
             # --- STRATEGY 2: Bearish Breakdown + Heavy PE Wall Nearby + CE OI Surge > 100% ---
             elif (not is_bullish_momentum) and ce_chg_pct >= self.ce_surge_threshold and is_nearby:
-                target_pe_strike = pe_wall if (pe_wall and abs(pe_wall - ltp)/ltp <= 0.03) else strike
+                target_pe_strike = pe_wall if (pe_wall and ltp > 0 and abs(pe_wall - ltp)/ltp <= 0.03) else strike
                 target_ltp = 0.0
                 for st in oi.get("strikes", []):
                     if st["strike"] == target_pe_strike:
