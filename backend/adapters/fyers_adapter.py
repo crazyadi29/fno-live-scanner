@@ -64,14 +64,20 @@ class FyersAdapter(BaseBrokerAdapter):
             if resp.status_code == 200:
                 data = resp.json()
                 return self._parse_fyers_chain(symbol, data)
+            else:
+                logger.error(f"Fyers API HTTP {resp.status_code} for {symbol}: {resp.text[:200]}")
         except Exception as e:
             logger.error(f"Fyers API fetch error for {symbol}: {e}")
         return None
 
-    def _parse_fyers_chain(self, symbol: str, raw_data: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_fyers_chain(self, symbol: str, raw_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Translates Fyers API JSON format into uniform scanner format"""
         chain_data = raw_data.get("data", {}).get("optionsChain", [])
         spot = raw_data.get("data", {}).get("spotPrice", 0.0)
+
+        if not spot or spot <= 0:
+            logger.warning(f"Skipping {symbol}: invalid spotPrice={spot!r} in Fyers response")
+            return None
 
         strikes = []
         for item in chain_data:
