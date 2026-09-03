@@ -25,7 +25,7 @@ class OIAnalyzer:
             "pe_volume": int
         }
         """
-        if not strikes_data or spot_price <= 0:
+        if not strikes_data or not spot_price or spot_price <= 0:
             return {}
 
         total_ce_oi = 0
@@ -67,7 +67,7 @@ class OIAnalyzer:
 
             # Distance from spot
             dist_pts = round(strike - spot_price, 2)
-            dist_pct = round((abs(dist_pts) / spot_price) * 100.0, 2) if spot_price > 0 else 0.0
+            dist_pct = round((abs(dist_pts) / spot_price) * 100.0, 2)
             is_nearby = dist_pct <= proximity_pct
 
             # Track heavy writer zones
@@ -149,8 +149,8 @@ class OIAnalyzer:
                 max_pain_strike = t_strike
 
         # Distance to Heavy Resistance (Call Seller Wall) & Support (Put Seller Wall)
-        ce_wall_dist_pct = round(((max_ce_strike - spot_price) / spot_price) * 100.0, 2) if (max_ce_strike and spot_price > 0) else 0.0
-        pe_wall_dist_pct = round(((spot_price - max_pe_strike) / spot_price) * 100.0, 2) if (max_pe_strike and spot_price > 0) else 0.0
+        ce_wall_dist_pct = round(((max_ce_strike - spot_price) / spot_price) * 100.0, 2) if (max_ce_strike and spot_price) else 0.0
+        pe_wall_dist_pct = round(((spot_price - max_pe_strike) / spot_price) * 100.0, 2) if (max_pe_strike and spot_price) else 0.0
 
         return {
             "symbol": symbol,
@@ -171,4 +171,3 @@ class OIAnalyzer:
             "surge_strikes": surge_strikes,
             "strikes": processed_strikes
         }
-
