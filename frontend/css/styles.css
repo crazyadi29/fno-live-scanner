@@ -1,0 +1,144 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+:root {
+  --bg-main: #0B0E14;
+  --bg-card: #121824;
+  --bg-card-hover: #182234;
+  --border-color: #1E293B;
+  --bullish: #00E676;
+  --bullish-glow: rgba(0, 230, 118, 0.25);
+  --bearish: #FF1744;
+  --bearish-glow: rgba(255, 23, 68, 0.25);
+  --accent: #00E5FF;
+  --accent-purple: #7C4DFF;
+  --text-main: #F1F5F9;
+  --text-muted: #94A3B8;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  overflow-x: hidden;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0E14;
+}
+::-webkit-scrollbar-thumb {
+  background: #1E293B;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Glowing Animations */
+@keyframes pulse-border-green {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(0, 230, 118, 0.3), inset 0 0 10px rgba(0, 230, 118, 0.1);
+    border-color: #00E676;
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(0, 230, 118, 0.6), inset 0 0 15px rgba(0, 230, 118, 0.2);
+    border-color: #69F0AE;
+  }
+}
+
+@keyframes pulse-border-red {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 23, 68, 0.3), inset 0 0 10px rgba(255, 23, 68, 0.1);
+    border-color: #FF1744;
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 23, 68, 0.6), inset 0 0 15px rgba(255, 23, 68, 0.2);
+    border-color: #FF5252;
+  }
+}
+
+.card-breakout-bullish {
+  animation: pulse-border-green 2.5s infinite;
+  background: linear-gradient(135deg, rgba(0, 230, 118, 0.08) 0%, rgba(18, 24, 36, 0.95) 100%);
+}
+
+.card-breakout-bearish {
+  animation: pulse-border-red 2.5s infinite;
+  background: linear-gradient(135deg, rgba(255, 23, 68, 0.08) 0%, rgba(18, 24, 36, 0.95) 100%);
+}
+
+.badge-surge {
+  background: linear-gradient(90deg, #FF6D00, #FFAB00);
+  color: #000;
+  font-weight: 800;
+  text-shadow: 0 1px 1px rgba(255,255,255,0.4);
+}
+
+.badge-bullish {
+  background: rgba(0, 230, 118, 0.15);
+  color: #00E676;
+  border: 1px solid rgba(0, 230, 118, 0.3);
+}
+
+.badge-bearish {
+  background: rgba(255, 23, 68, 0.15);
+  color: #FF1744;
+  border: 1px solid rgba(255, 23, 68, 0.3);
+}
+
+/* Glassmorphism */
+.glass-panel {
+  background: rgba(18, 24, 36, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+}
+
+/* OI Bar visualization */
+.oi-bar-ce {
+  background: linear-gradient(90deg, transparent, rgba(255, 23, 68, 0.45));
+  border-right: 3px solid #FF1744;
+}
+
+.oi-bar-pe {
+  background: linear-gradient(270deg, transparent, rgba(0, 230, 118, 0.45));
+  border-left: 3px solid #00E676;
+}
+
+.atm-strike-row {
+  background: rgba(0, 229, 255, 0.08) !important;
+  border-top: 1px solid rgba(0, 229, 255, 0.3);
+  border-bottom: 1px solid rgba(0, 229, 255, 0.3);
+}
+
+.heavy-seller-strike {
+  background: rgba(255, 171, 0, 0.12) !important;
+}
+
+/* Sound Ripple */
+.live-dot {
+  position: relative;
+}
+.live-dot::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  background: inherit;
+  animation: ripple 1.8s infinite;
+  opacity: 0.7;
+}
+@keyframes ripple {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
