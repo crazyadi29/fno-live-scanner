@@ -1,6 +1,9 @@
 import asyncio
+import hashlib
 import json
 import os
+import secrets
+from urllib.parse import urlencode
 import logging
 from typing import List, Dict, Any, Set
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -67,6 +70,83 @@ class ConnectionManager:
             self.active_connections.discard(d)
 
 manager = ConnectionManager()
+fyers_oauth_state = ""
+
+
+@app.get("/api/auth/fyers/login")
+async def fyers_login():
+    """Start Fyers OAuth and redirect the user to the Fyers login page."""
+    global fyers_oauth_state
+    if not settings.FYERS_APP_ID or not settings.FYERS_SECRET_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="FYERS_APP_ID and FYERS_SECRET_KEY must be configured"
+        )
+
+    fyers_oauth_state = secrets.token_urlsafe(24)
+    params = urlencode({
+        "client_id": settings.FYERS_APP_ID,
+        "redirect_uri": settings.FYERS_REDIRECT_URI,
+        "response_type": "code",
+        "state": fyers_oauth_state,
+    })
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(
+        f"https://api-t1.fyers.in/api/v3/generate-authcode?{params}"
+    )
+
+
+@app.get("/api/auth/fyers/callback")
+async def fyers_callback(
+    auth_code: str = "",
+    state: str = "",
+    s: str = "",
+    code: str = "",
+    error: str = "",
+):
+    """Exchange the one-time Fyers authorization code for an access token."""
+    if error:
+        raise HTTPException(status_code=400, detail=f"Fyers authorization failed: {error}")
+    received_code = auth_code or s or code
+    if not received_code:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing Fyers authorization code. Start at /api/auth/fyers/login."
+        )
+    if fyers_oauth_state and state != fyers_oauth_state:
+        raise HTTPException(status_code=400, detail="Invalid OAuth state")
+    if not settings.FYERS_APP_ID or not settings.FYERS_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Fyers credentials are not configured")
+
+    app_id_hash = hashlib.sha256(
+        f"{settings.FYERS_APP_ID}:{settings.FYERS_SECRET_KEY}".encode()
+    ).hexdigest()
+    response = await asyncio.to_thread(
+        requests.post,
+        "https://api-t1.fyers.in/api/v3/validate-authcode",
+        json={
+            "grant_type": "authorization_code",
+            "appIdHash": app_id_hash,
+            "code": received_code,
+        },
+        timeout=10,
+    )
+    data = response.json()
+    if response.status_code != 200 or data.get("s") != "ok":
+        raise HTTPException(status_code=400, detail=data)
+
+    access_token = data.get("access_token", "")
+    adapters["fyers"].update_credentials({
+        "app_id": settings.FYERS_APP_ID,
+        "access_token": access_token,
+    })
+    settings.FYERS_ACCESS_TOKEN = access_token
+    await adapters["fyers"].start()
+    return {
+        "status": "success",
+        "message": "Token generated. Add this value to Railway as FYERS_ACCESS_TOKEN.",
+        "access_token": access_token,
+    }
 
 # Background Scanner Broadcast Loop
 async def scanner_broadcast_loop():

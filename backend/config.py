@@ -30,7 +30,12 @@ class Settings:
 
     # Railway environment configuration
     FYERS_APP_ID: str = os.getenv("FYERS_APP_ID", "")
+    FYERS_SECRET_KEY: str = os.getenv("FYERS_SECRET_KEY", "")
     FYERS_ACCESS_TOKEN: str = os.getenv("FYERS_ACCESS_TOKEN", "")
+    FYERS_REDIRECT_URI: str = os.getenv(
+        "FYERS_REDIRECT_URI",
+        "http://localhost:8000/api/auth/fyers/callback"
+    )
     ACTIVE_ADAPTER: str = os.getenv(
         "ACTIVE_ADAPTER",
         "fyers" if FYERS_APP_ID and FYERS_ACCESS_TOKEN else "simulator"
