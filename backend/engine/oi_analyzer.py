@@ -167,6 +167,8 @@ class OIAnalyzer:
         ce_wall_dist_pct = round(((max_ce_strike - spot_price) / spot_price) * 100.0, 2) if (max_ce_strike and spot_price) else 0.0
         pe_wall_dist_pct = round(((spot_price - max_pe_strike) / spot_price) * 100.0, 2) if (max_pe_strike and spot_price) else 0.0
 
+        # Keep every qualifying option in the per-stock result; the API layer
+        # selects one strongest strike per stock and option side.
         return {
             "symbol": symbol,
             "spot_price": spot_price,

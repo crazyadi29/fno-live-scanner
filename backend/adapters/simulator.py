@@ -34,6 +34,7 @@ class MarketSimulatorAdapter(BaseBrokerAdapter):
     def __init__(self):
         super().__init__("Simulator")
         self._running = False
+        self._simulation_task: Optional[asyncio.Task] = None
         self._stocks: Dict[str, Dict[str, Any]] = {}
         self._initialize_universe()
 
@@ -149,13 +150,21 @@ class MarketSimulatorAdapter(BaseBrokerAdapter):
                 break
 
     async def start(self):
+        await self.stop()
         self._running = True
         self.is_connected = True
-        asyncio.create_task(self._simulation_loop())
+        self._simulation_task = asyncio.create_task(self._simulation_loop())
 
     async def stop(self):
         self._running = False
         self.is_connected = False
+        if self._simulation_task and not self._simulation_task.done():
+            self._simulation_task.cancel()
+            try:
+                await self._simulation_task
+            except asyncio.CancelledError:
+                pass
+        self._simulation_task = None
 
     async def _simulation_loop(self):
         step_counter = 0

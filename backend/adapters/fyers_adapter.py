@@ -96,6 +96,9 @@ class FyersAdapter(BaseBrokerAdapter):
                         response_data["low"] = quote.get("low", 0.0)
                     if not response_data.get("prev_close"):
                         response_data["prev_close"] = quote.get("prev_close", 0.0)
+                    response_data["tick_change"] = quote.get("change", 0.0)
+                    response_data["tick_change_pct"] = quote.get("change_pct", 0.0)
+                    response_data["tick_timestamp"] = quote.get("timestamp", 0.0)
                 candles = await self.fetch_5m_history(fyers_sym)
                 if candles:
                     response_data["candle_history"] = candles
@@ -129,12 +132,17 @@ class FyersAdapter(BaseBrokerAdapter):
             values = quote.get("v") or {}
             ltp = values.get("lp")
             prev_close = values.get("prev_close") or values.get("prev_close_price")
+            change = values.get("ch") or values.get("change") or 0.0
+            change_pct = values.get("chp") or values.get("change_pct") or 0.0
             return {
                 "ltp": float(ltp) if ltp else 0.0,
                 "open": float(values.get("open_price") or values.get("open") or values.get("o") or ltp or 0.0),
                 "high": float(values.get("high_price") or values.get("high") or values.get("h") or ltp or 0.0),
                 "low": float(values.get("low_price") or values.get("low") or values.get("l") or ltp or 0.0),
                 "prev_close": float(prev_close or 0.0),
+                "change": float(change),
+                "change_pct": float(change_pct),
+                "timestamp": float(values.get("tt") or values.get("timestamp") or 0.0),
             }
         except (requests.RequestException, ValueError, TypeError, IndexError, KeyError):
             return None
@@ -222,6 +230,9 @@ class FyersAdapter(BaseBrokerAdapter):
             "high": response_data.get("high") or spot,
             "low": response_data.get("low") or spot,
             "prev_close": response_data.get("prev_close") or spot,
+            "tick_change": response_data.get("tick_change", 0.0),
+            "tick_change_pct": response_data.get("tick_change_pct", 0.0),
+            "tick_timestamp": response_data.get("tick_timestamp", 0.0),
             "candle_history": response_data.get("candle_history", []),
             "candle_timeframe": response_data.get("candle_timeframe", "unknown"),
             "strikes": strikes

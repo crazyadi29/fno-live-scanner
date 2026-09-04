@@ -85,6 +85,9 @@ class BreakoutScanner:
             "surge_strikes": oi_analysis.get("surge_strikes", []),
             "pe_oi_surge_options": oi_analysis.get("pe_oi_surge_options", []),
             "ce_oi_surge_options": oi_analysis.get("ce_oi_surge_options", []),
+            "tick_change": stock_snapshot.get("tick_change", 0.0),
+            "tick_change_pct": stock_snapshot.get("tick_change_pct", 0.0),
+            "tick_timestamp": stock_snapshot.get("tick_timestamp", 0.0),
             "breakout_signals": breakout_signals,
             "strategy": strategy,
             "strikes": oi_analysis.get("strikes", [])

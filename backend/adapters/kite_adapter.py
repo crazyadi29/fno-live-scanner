@@ -19,6 +19,7 @@ class KiteAdapter(BaseBrokerAdapter):
         self.api_key = api_key
         self.access_token = access_token
         self._running = False
+        self._poll_task: Optional[asyncio.Task] = None
         self._cache: Dict[str, Dict[str, Any]] = {}
 
     def update_credentials(self, credentials: Dict[str, str]):
@@ -28,16 +29,24 @@ class KiteAdapter(BaseBrokerAdapter):
         self.is_connected = bool(self.api_key and self.access_token)
 
     async def start(self):
+        await self.stop()
         self._running = True
         if self.api_key and self.access_token:
             self.is_connected = True
-            asyncio.create_task(self._poll_loop())
+            self._poll_task = asyncio.create_task(self._poll_loop())
         else:
             self.is_connected = False
 
     async def stop(self):
         self._running = False
         self.is_connected = False
+        if self._poll_task and not self._poll_task.done():
+            self._poll_task.cancel()
+            try:
+                await self._poll_task
+            except asyncio.CancelledError:
+                pass
+        self._poll_task = None
 
     def _get_headers(self) -> Dict[str, str]:
         return {

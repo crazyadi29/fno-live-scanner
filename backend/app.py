@@ -176,6 +176,9 @@ async def scanner_broadcast_loop():
                         "ltp": result["technicals"]["ltp"],
                         "change_pct": result["technicals"]["change_pct"],
                         "change_pts": result["technicals"]["change_pts"],
+                        "tick_change": result["tick_change"],
+                        "tick_change_pct": result["tick_change_pct"],
+                        "tick_timestamp": result["tick_timestamp"],
                         "momentum_direction": result["technicals"]["momentum_direction"],
                         "is_momentum_stock": result["technicals"]["is_momentum_stock"],
                         "vwap": result["technicals"]["vwap"],
@@ -195,8 +198,14 @@ async def scanner_broadcast_loop():
                         all_signals.extend(result["breakout_signals"])
                     if result["surge_strikes"]:
                         all_surges.extend(result["surge_strikes"])
-                    all_pe_oi_surges.extend(result["pe_oi_surge_options"])
-                    all_ce_oi_surges.extend(result["ce_oi_surge_options"])
+                    all_pe_oi_surges.append(max(
+                        result["pe_oi_surge_options"],
+                        key=lambda option: option["oi_change_pct"],
+                    )) if result["pe_oi_surge_options"] else None
+                    all_ce_oi_surges.append(max(
+                        result["ce_oi_surge_options"],
+                        key=lambda option: option["oi_change_pct"],
+                    )) if result["ce_oi_surge_options"] else None
 
                 # Broadcast payload
                 watchlist_stocks = [
