@@ -1,4 +1,6 @@
 import asyncio
+import csv
+import io
 import requests
 import logging
 from typing import List, Dict, Any, Optional
@@ -119,7 +121,8 @@ class FyersAdapter(BaseBrokerAdapter):
         }
 
     async def _poll_loop(self):
-        symbols = settings.DEFAULT_SYMBOLS
+        symbols = await self._load_fno_universe()
+        logger.info("Scanning %d F&O underlyings", len(symbols))
         while self._running and self.is_connected:
             for sym in symbols:
                 if not self._running or not self.is_connected:
@@ -134,6 +137,27 @@ class FyersAdapter(BaseBrokerAdapter):
                     logger.warning("Fyers polling error for %s: %s", sym, exc)
                 await asyncio.sleep(0.2)
             await asyncio.sleep(max(1.0, settings.SCAN_INTERVAL_MS / 1000.0))
+
+    async def _load_fno_universe(self) -> List[str]:
+        """Load unique F&O underlyings from the daily Fyers symbol master."""
+        url = "https://public.fyers.in/sym_details/NSE_FO.csv"
+        try:
+            response = await asyncio.to_thread(requests.get, url, timeout=15)
+            response.raise_for_status()
+            symbols = set()
+            for row in csv.reader(io.StringIO(response.text)):
+                if len(row) <= 13:
+                    continue
+                trading_symbol = row[9]
+                underlying = row[13].strip()
+                if underlying and trading_symbol.startswith("NSE:") and trading_symbol.endswith(("FUT", "CE", "PE")):
+                    symbols.add(underlying)
+            if symbols:
+                return sorted(symbols)
+            logger.warning("Fyers symbol master returned no F&O underlyings")
+        except (requests.RequestException, csv.Error) as exc:
+            logger.warning("Unable to load Fyers F&O universe: %s", exc)
+        return settings.DEFAULT_SYMBOLS
 
     def get_market_snapshots(self) -> List[Dict[str, Any]]:
         return list(self._cache.values())
