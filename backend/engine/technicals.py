@@ -1,5 +1,6 @@
 import math
 from typing import List, Dict, Any, Optional
+from backend.config import settings
 
 class TechnicalEngine:
     """
@@ -98,6 +99,13 @@ class TechnicalEngine:
         
         change_pts = round(ltp - prev_close, 2)
         change_pct = round((change_pts / prev_close) * 100.0, 2) if prev_close > 0 else 0.0
+        threshold = settings.MOMENTUM_MOVE_THRESHOLD_PCT
+        if change_pct >= threshold:
+            momentum_direction = "UP"
+        elif change_pct <= -threshold:
+            momentum_direction = "DOWN"
+        else:
+            momentum_direction = "NONE"
         
         # Day Range & Breakout Proximity
         day_range = max(0.01, high_p - low_p)
@@ -141,6 +149,8 @@ class TechnicalEngine:
             "prev_close": prev_close,
             "change_pts": change_pts,
             "change_pct": change_pct,
+            "momentum_direction": momentum_direction,
+            "is_momentum_stock": momentum_direction != "NONE",
             "vwap": vwap,
             "ema9": ema9,
             "ema21": ema21,

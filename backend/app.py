@@ -88,6 +88,8 @@ async def scanner_broadcast_loop():
                         "ltp": result["technicals"]["ltp"],
                         "change_pct": result["technicals"]["change_pct"],
                         "change_pts": result["technicals"]["change_pts"],
+                        "momentum_direction": result["technicals"]["momentum_direction"],
+                        "is_momentum_stock": result["technicals"]["is_momentum_stock"],
                         "vwap": result["technicals"]["vwap"],
                         "rsi": result["technicals"]["rsi"],
                         "ema9": result["technicals"]["ema9"],

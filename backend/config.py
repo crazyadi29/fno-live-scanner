@@ -20,6 +20,7 @@ class Settings:
     WRITER_PROXIMITY_PCT: float = 2.0          # Call/Put seller within 2% of spot
     RSI_BULLISH_LEVEL: float = 55.0            # RSI above 55 indicates bullish strength
     RSI_BEARISH_LEVEL: float = 45.0            # RSI below 45 indicates bearish strength
+    MOMENTUM_MOVE_THRESHOLD_PCT: float = 1.0  # Include stocks moving at least 1% up or down
     
     # Minimum OI for liquid contract filter
     MIN_OI_FILTER: int = 50000

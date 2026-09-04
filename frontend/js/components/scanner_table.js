@@ -55,6 +55,10 @@ class ScannerTable {
         return hasCESurge;
       } else if (this.currentFilter === 'VOLUME_SURGE') {
         return isVolSurge;
+      } else if (this.currentFilter === 'MOMENTUM_UP') {
+        return stock.momentum_direction === 'UP';
+      } else if (this.currentFilter === 'MOMENTUM_DOWN') {
+        return stock.momentum_direction === 'DOWN';
       }
       return true;
     });
@@ -80,6 +84,11 @@ class ScannerTable {
         momBadge = '<span class="px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[11px] font-semibold">BEARISH</span>';
       } else {
         momBadge = '<span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[11px]">NEUTRAL</span>';
+      }
+      if (s.momentum_direction === 'UP') {
+        momBadge += '<span class="ml-1 px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold">+1% MOVE</span>';
+      } else if (s.momentum_direction === 'DOWN') {
+        momBadge += '<span class="ml-1 px-2 py-0.5 rounded bg-orange-500/10 text-orange-300 border border-orange-500/30 text-[11px] font-bold">-1% MOVE</span>';
       }
 
       // Volume Surge Multiplier
