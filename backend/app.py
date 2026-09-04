@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import os
+import requests
 import secrets
 from urllib.parse import urlencode
 import logging
