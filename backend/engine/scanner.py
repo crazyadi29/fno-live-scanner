@@ -33,6 +33,7 @@ class BreakoutScanner:
         low_p = float(stock_snapshot.get("low", ltp))
         prev_close = float(stock_snapshot.get("prev_close", ltp))
         candle_history = stock_snapshot.get("candle_history", [])
+        candle_timeframe = stock_snapshot.get("candle_timeframe", "unknown")
         strikes_raw = stock_snapshot.get("strikes", [])
 
         # 1. Technical Analysis
@@ -89,7 +90,7 @@ class BreakoutScanner:
 
     def _evaluate_strategy(self, snapshot: Dict[str, Any], tech: Dict[str, Any],
                            oi: Dict[str, Any]) -> Dict[str, Any]:
-        """Apply the staged F&O -> S/R -> OI -> confirmation workflow."""
+        """Keep bullish stocks whose 5-minute resistance matches the CE OI wall."""
         symbol = snapshot["symbol"]
         ltp = tech["ltp"]
         support, resistance = self._support_resistance(snapshot, oi)
@@ -97,7 +98,16 @@ class BreakoutScanner:
         highest_ce = oi.get("highest_ce_oi_strike")
         support_match = self._levels_match(support, highest_pe, ltp)
         resistance_match = self._levels_match(resistance, highest_ce, ltp)
-        match = support_match or resistance_match
+        candles = snapshot.get("candle_history", [])
+        chart_ready = snapshot.get("candle_timeframe") == "5m" and len(candles) >= 21
+        one_percent_up = tech["change_pct"] >= 1.0
+        bullish_resistance_match = one_percent_up and chart_ready and resistance_match
+        pe_surge_pct = max(
+            (float(strike.get("pe_change_pct", 0.0)) for strike in oi.get("strikes", [])),
+            default=0.0
+        )
+        high_conviction = bullish_resistance_match and pe_surge_pct >= self.pe_surge_threshold
+        match = bullish_resistance_match
         existing = self.watchlist.get(symbol)
 
         result = {
@@ -109,6 +119,11 @@ class BreakoutScanner:
             "highest_ce_oi_strike": highest_ce,
             "support_oi_match": support_match,
             "resistance_oi_match": resistance_match,
+            "chart_timeframe": snapshot.get("candle_timeframe", "unknown"),
+            "chart_candles": len(candles),
+            "one_percent_up": one_percent_up,
+            "pe_oi_change_pct": round(pe_surge_pct, 1),
+            "high_conviction": high_conviction,
             "significant_oi_change": False,
             "confirmations": {
                 "price_action": False,
@@ -138,18 +153,19 @@ class BreakoutScanner:
         significant_change = max(change_pct.values()) >= min(self.pe_surge_threshold, self.ce_surge_threshold)
         result["significant_oi_change"] = significant_change
         result["oi_change_pct"] = change_pct
+        result["high_conviction"] = high_conviction
 
         bullish = tech["momentum"] in ["BULLISH_BREAKOUT", "BULLISH_STRONG", "BULLISH_MILD"]
         bearish = tech["momentum"] in ["BEARISH_BREAKDOWN", "BEARISH_STRONG"]
-        price_action = (bullish and support_match and tech["change_pct"] > 0) or (bearish and resistance_match and tech["change_pct"] < 0)
+        price_action = bullish and bullish_resistance_match and tech["change_pct"] >= 1.0
         result["confirmations"]["price_action"] = price_action
 
-        if significant_change and price_action and result["confirmations"]["volume"]:
+        if high_conviction and price_action and result["confirmations"]["volume"]:
             result["status"] = "TRADE_SETUP"
             result["setup"] = {
                 "action": "BUY_CALL" if bullish else "BUY_PUT",
                 "trigger_level": support if bullish else resistance,
-                "reason": "OI change, price action, and volume confirmation satisfied",
+                "reason": "5-minute resistance matched the CE OI wall and PE OI increased by at least 100%",
             }
 
         existing.update({"total_ce_oi": oi.get("total_ce_oi", 0), "total_pe_oi": oi.get("total_pe_oi", 0)})

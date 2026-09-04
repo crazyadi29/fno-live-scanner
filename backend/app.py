@@ -4,9 +4,10 @@ import json
 import os
 import requests
 import secrets
+import time
 from urllib.parse import urlencode
 import logging
-from typing import List, Dict, Any, Set
+from typing import List, Dict, Any, Set, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -72,6 +73,7 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 fyers_oauth_state = ""
+scanner_task: Optional[asyncio.Task] = None
 
 
 @app.get("/api/auth/fyers/login")
@@ -164,6 +166,9 @@ async def scanner_broadcast_loop():
 
                 for snap in snapshots:
                     result = scanner.scan_stock(snap)
+                    if result.get("skipped") or "technicals" not in result:
+                        logger.warning("Skipping invalid scanner result for %s", result.get("symbol", "unknown"))
+                        continue
                     scanned_results.append({
                         "symbol": result["symbol"],
                         "ltp": result["technicals"]["ltp"],
@@ -187,13 +192,25 @@ async def scanner_broadcast_loop():
                         all_surges.extend(result["surge_strikes"])
 
                 # Broadcast payload
+                watchlist_stocks = [
+                    stock for stock in scanned_results
+                    if stock["strategy"].get("watchlist")
+                ]
+                high_conviction_stocks = [
+                    stock for stock in watchlist_stocks
+                    if stock["strategy"].get("high_conviction")
+                ]
                 payload = {
                     "type": "SCANNER_UPDATE",
                     "mode": active_adapter_name,
                     "is_connected": adapter.is_connected,
-                    "timestamp": asyncio.get_event_loop().time(),
+                    "timestamp": time.time(),
                     "stocks_count": len(scanned_results),
                     "stocks": scanned_results,
+                    "watchlist_count": len(watchlist_stocks),
+                    "watchlist_stocks": watchlist_stocks,
+                    "high_conviction_count": len(high_conviction_stocks),
+                    "high_conviction_stocks": high_conviction_stocks,
                     "breakout_signals": all_signals,
                     "surge_strikes": all_surges
                 }
@@ -205,11 +222,20 @@ async def scanner_broadcast_loop():
 
 @app.on_event("startup")
 async def startup_event():
+    global scanner_task
     await adapters[active_adapter_name].start()
-    asyncio.create_task(scanner_broadcast_loop())
+    scanner_task = asyncio.create_task(scanner_broadcast_loop())
 
 @app.on_event("shutdown")
 async def shutdown_event():
+    global scanner_task
+    if scanner_task and not scanner_task.done():
+        scanner_task.cancel()
+        try:
+            await scanner_task
+        except asyncio.CancelledError:
+            pass
+    scanner_task = None
     for adp in adapters.values():
         await adp.stop()
 

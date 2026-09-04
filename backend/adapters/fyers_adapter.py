@@ -3,6 +3,7 @@ import csv
 import io
 import requests
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from backend.adapters.base import BaseBrokerAdapter
 from backend.config import settings
@@ -87,6 +88,10 @@ class FyersAdapter(BaseBrokerAdapter):
                     quote_price = await self.fetch_spot_price(fyers_sym)
                     if quote_price:
                         response_data["spotPrice"] = quote_price
+                candles = await self.fetch_5m_history(fyers_sym)
+                if candles:
+                    response_data["candle_history"] = candles
+                    response_data["candle_timeframe"] = "5m"
                 return self._parse_fyers_chain(symbol, data)
             else:
                 logger.error(f"Fyers API HTTP {resp.status_code} for {symbol}: {resp.text[:200]}")
@@ -112,6 +117,46 @@ class FyersAdapter(BaseBrokerAdapter):
             return float(price) if price else None
         except (requests.RequestException, ValueError, TypeError, IndexError):
             return None
+
+    async def fetch_5m_history(self, fyers_symbol: str) -> List[Dict[str, float]]:
+        """Fetch recent 5-minute candles for chart-based support and resistance."""
+        today = datetime.now(timezone.utc).date()
+        start = today - timedelta(days=5)
+        params = {
+            "symbol": fyers_symbol,
+            "resolution": "5",
+            "date_format": "1",
+            "range_from": start.isoformat(),
+            "range_to": today.isoformat(),
+            "cont_flag": "1",
+        }
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.BASE_URL}/history",
+                headers=self._get_headers(),
+                params=params,
+                timeout=6,
+            )
+            if response.status_code != 200:
+                return []
+            data = response.json()
+            if data.get("s") != "ok":
+                return []
+            return [
+                {
+                    "timestamp": float(candle[0]),
+                    "open": float(candle[1]),
+                    "high": float(candle[2]),
+                    "low": float(candle[3]),
+                    "close": float(candle[4]),
+                    "volume": float(candle[5]),
+                }
+                for candle in data.get("candles", [])
+                if len(candle) >= 6
+            ]
+        except (requests.RequestException, ValueError, TypeError, IndexError):
+            return []
 
     def _parse_fyers_chain(self, symbol: str, raw_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Translates Fyers API JSON format into uniform scanner format"""
@@ -151,6 +196,8 @@ class FyersAdapter(BaseBrokerAdapter):
             "high": raw_data.get("data", {}).get("high", spot),
             "low": raw_data.get("data", {}).get("low", spot),
             "prev_close": raw_data.get("data", {}).get("prev_close", spot),
+            "candle_history": response_data.get("candle_history", []),
+            "candle_timeframe": response_data.get("candle_timeframe", "unknown"),
             "strikes": strikes
         }
 
