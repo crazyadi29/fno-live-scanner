@@ -39,6 +39,8 @@ class OIAnalyzer:
         max_pe_strike = None
         
         surge_strikes = []
+        pe_oi_surge_options = []
+        ce_oi_surge_options = []
         processed_strikes = []
 
         for row in strikes_data:
@@ -80,8 +82,8 @@ class OIAnalyzer:
                 max_pe_strike = strike
 
             # Check for sudden surges (> 100% change in OI)
-            has_pe_surge = (pe_chg_pct >= surge_threshold_pct and pe_oi >= 10000)
-            has_ce_surge = (ce_chg_pct >= surge_threshold_pct and ce_oi >= 10000)
+            has_pe_surge = pe_chg_pct >= surge_threshold_pct
+            has_ce_surge = ce_chg_pct >= surge_threshold_pct
 
             surge_type = None
             if has_pe_surge and has_ce_surge:
@@ -109,6 +111,19 @@ class OIAnalyzer:
                 "surge_type": surge_type
             }
             processed_strikes.append(strike_info)
+
+            if has_pe_surge:
+                pe_oi_surge_options.append({
+                    "symbol": symbol, "strike": strike, "option_type": "PE",
+                    "oi": pe_oi, "oi_change": pe_chg, "oi_change_pct": pe_chg_pct,
+                    "ltp": pe_ltp, "volume": pe_vol, "dist_pct": dist_pct,
+                })
+            if has_ce_surge:
+                ce_oi_surge_options.append({
+                    "symbol": symbol, "strike": strike, "option_type": "CE",
+                    "oi": ce_oi, "oi_change": ce_chg, "oi_change_pct": ce_chg_pct,
+                    "ltp": ce_ltp, "volume": ce_vol, "dist_pct": dist_pct,
+                })
 
             if surge_type is not None:
                 surge_strikes.append({
@@ -171,5 +186,7 @@ class OIAnalyzer:
             "highest_ce_oi_strike": max_ce_strike,
             "highest_pe_oi_strike": max_pe_strike,
             "surge_strikes": surge_strikes,
+            "pe_oi_surge_options": pe_oi_surge_options,
+            "ce_oi_surge_options": ce_oi_surge_options,
             "strikes": processed_strikes
         }

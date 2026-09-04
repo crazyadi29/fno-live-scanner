@@ -83,6 +83,8 @@ class BreakoutScanner:
                 "pe_wall_dist_pct": oi_analysis.get("pe_wall_dist_pct", 0.0),
             },
             "surge_strikes": oi_analysis.get("surge_strikes", []),
+            "pe_oi_surge_options": oi_analysis.get("pe_oi_surge_options", []),
+            "ce_oi_surge_options": oi_analysis.get("ce_oi_surge_options", []),
             "breakout_signals": breakout_signals,
             "strategy": strategy,
             "strikes": oi_analysis.get("strikes", [])

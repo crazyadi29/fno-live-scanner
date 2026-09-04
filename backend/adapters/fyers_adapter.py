@@ -84,10 +84,18 @@ class FyersAdapter(BaseBrokerAdapter):
                     )
                     return None
                 response_data = data.get("data") or {}
-                if not response_data.get("spotPrice"):
-                    quote_price = await self.fetch_spot_price(fyers_sym)
-                    if quote_price:
-                        response_data["spotPrice"] = quote_price
+                quote = await self.fetch_quote(fyers_sym)
+                if quote:
+                    if not response_data.get("spotPrice"):
+                        response_data["spotPrice"] = quote.get("ltp", 0.0)
+                    if not response_data.get("open"):
+                        response_data["open"] = quote.get("open", 0.0)
+                    if not response_data.get("high"):
+                        response_data["high"] = quote.get("high", 0.0)
+                    if not response_data.get("low"):
+                        response_data["low"] = quote.get("low", 0.0)
+                    if not response_data.get("prev_close"):
+                        response_data["prev_close"] = quote.get("prev_close", 0.0)
                 candles = await self.fetch_5m_history(fyers_sym)
                 if candles:
                     response_data["candle_history"] = candles
@@ -101,6 +109,11 @@ class FyersAdapter(BaseBrokerAdapter):
 
     async def fetch_spot_price(self, fyers_symbol: str) -> Optional[float]:
         """Get the underlying LTP when the option-chain response omits it."""
+        quote = await self.fetch_quote(fyers_symbol)
+        return quote.get("ltp") if quote else None
+
+    async def fetch_quote(self, fyers_symbol: str) -> Optional[Dict[str, float]]:
+        """Get underlying quote fields used by percentage and chart calculations."""
         try:
             response = await asyncio.to_thread(
                 requests.get,
@@ -113,9 +126,17 @@ class FyersAdapter(BaseBrokerAdapter):
                 return None
             data = response.json()
             quote = (data.get("d") or [{}])[0]
-            price = (quote.get("v") or {}).get("lp")
-            return float(price) if price else None
-        except (requests.RequestException, ValueError, TypeError, IndexError):
+            values = quote.get("v") or {}
+            ltp = values.get("lp")
+            prev_close = values.get("prev_close") or values.get("prev_close_price")
+            return {
+                "ltp": float(ltp) if ltp else 0.0,
+                "open": float(values.get("open_price") or values.get("open") or values.get("o") or ltp or 0.0),
+                "high": float(values.get("high_price") or values.get("high") or values.get("h") or ltp or 0.0),
+                "low": float(values.get("low_price") or values.get("low") or values.get("l") or ltp or 0.0),
+                "prev_close": float(prev_close or 0.0),
+            }
+        except (requests.RequestException, ValueError, TypeError, IndexError, KeyError):
             return None
 
     async def fetch_5m_history(self, fyers_symbol: str) -> List[Dict[str, float]]:
@@ -162,7 +183,12 @@ class FyersAdapter(BaseBrokerAdapter):
         """Translates Fyers API JSON format into uniform scanner format"""
         response_data = raw_data.get("data") or {}
         chain_data = response_data.get("optionsChain", [])
-        spot = response_data.get("spotPrice", 0.0)
+        spot = (
+            response_data.get("spotPrice")
+            or response_data.get("spot_price")
+            or response_data.get("ltp")
+            or 0.0
+        )
 
         if not spot or spot <= 0:
             logger.warning(
@@ -192,10 +218,10 @@ class FyersAdapter(BaseBrokerAdapter):
         return {
             "symbol": symbol,
             "ltp": spot,
-            "open": raw_data.get("data", {}).get("open", spot),
-            "high": raw_data.get("data", {}).get("high", spot),
-            "low": raw_data.get("data", {}).get("low", spot),
-            "prev_close": raw_data.get("data", {}).get("prev_close", spot),
+            "open": response_data.get("open") or spot,
+            "high": response_data.get("high") or spot,
+            "low": response_data.get("low") or spot,
+            "prev_close": response_data.get("prev_close") or spot,
             "candle_history": response_data.get("candle_history", []),
             "candle_timeframe": response_data.get("candle_timeframe", "unknown"),
             "strikes": strikes

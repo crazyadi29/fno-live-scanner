@@ -163,6 +163,8 @@ async def scanner_broadcast_loop():
                 scanned_results = []
                 all_signals = []
                 all_surges = []
+                all_pe_oi_surges = []
+                all_ce_oi_surges = []
 
                 for snap in snapshots:
                     result = scanner.scan_stock(snap)
@@ -183,6 +185,9 @@ async def scanner_broadcast_loop():
                         "momentum": result["technicals"]["momentum"],
                         "volume_surge": result["technicals"]["volume_surge"],
                         "oi_summary": result["oi_summary"],
+                        "strikes": result["strikes"],
+                        "pe_oi_surge_options": result["pe_oi_surge_options"],
+                        "ce_oi_surge_options": result["ce_oi_surge_options"],
                         "strategy": result["strategy"],
                     })
 
@@ -190,6 +195,8 @@ async def scanner_broadcast_loop():
                         all_signals.extend(result["breakout_signals"])
                     if result["surge_strikes"]:
                         all_surges.extend(result["surge_strikes"])
+                    all_pe_oi_surges.extend(result["pe_oi_surge_options"])
+                    all_ce_oi_surges.extend(result["ce_oi_surge_options"])
 
                 # Broadcast payload
                 watchlist_stocks = [
@@ -212,7 +219,9 @@ async def scanner_broadcast_loop():
                     "high_conviction_count": len(high_conviction_stocks),
                     "high_conviction_stocks": high_conviction_stocks,
                     "breakout_signals": all_signals,
-                    "surge_strikes": all_surges
+                    "surge_strikes": all_surges,
+                    "pe_oi_surge_options": all_pe_oi_surges,
+                    "ce_oi_surge_options": all_ce_oi_surges
                 }
                 await manager.broadcast(payload)
         except Exception as e:
