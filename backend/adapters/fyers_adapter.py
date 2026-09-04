@@ -82,12 +82,36 @@ class FyersAdapter(BaseBrokerAdapter):
                         symbol, data.get("s"), data.get("code"), data.get("message")
                     )
                     return None
+                response_data = data.get("data") or {}
+                if not response_data.get("spotPrice"):
+                    quote_price = await self.fetch_spot_price(fyers_sym)
+                    if quote_price:
+                        response_data["spotPrice"] = quote_price
                 return self._parse_fyers_chain(symbol, data)
             else:
                 logger.error(f"Fyers API HTTP {resp.status_code} for {symbol}: {resp.text[:200]}")
         except Exception as e:
             logger.error(f"Fyers API fetch error for {symbol}: {e}")
         return None
+
+    async def fetch_spot_price(self, fyers_symbol: str) -> Optional[float]:
+        """Get the underlying LTP when the option-chain response omits it."""
+        try:
+            response = await asyncio.to_thread(
+                requests.get,
+                f"{self.BASE_URL}/quotes",
+                headers=self._get_headers(),
+                params={"symbols": fyers_symbol},
+                timeout=4,
+            )
+            if response.status_code != 200:
+                return None
+            data = response.json()
+            quote = (data.get("d") or [{}])[0]
+            price = (quote.get("v") or {}).get("lp")
+            return float(price) if price else None
+        except (requests.RequestException, ValueError, TypeError, IndexError):
+            return None
 
     def _parse_fyers_chain(self, symbol: str, raw_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Translates Fyers API JSON format into uniform scanner format"""
